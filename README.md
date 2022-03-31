@@ -1,3 +1,3 @@
 # ROUTE
 
-This model achive precise urban vehicle trajectory predictionss
+This model achive precise urban vehicle trajectory predictions.
