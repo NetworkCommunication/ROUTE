@@ -121,7 +121,6 @@ class PositionWiseFFN(nn.Module):
         o = self.o(o)
         o = self.dropout(o)
 
-        # residual + LayerNorm层
         o = self.layer_norm(x + o)
         return o  # [n_car, n_attentions, embed_dim]
 
@@ -130,7 +129,7 @@ class EncoderLayer(nn.Module):
 
     def __init__(self, n_head, emb_dim, drop_rate):
         super().__init__()
-        # MultiHead + PositionWiseFFN 为一个Transformer的Encoder Layer
+
         self.mh = MultiHeadAttention(n_head, emb_dim, drop_rate)
         self.ffn = PositionWiseFFN(emb_dim)
         self.drop = nn.Dropout(drop_rate)
@@ -145,7 +144,7 @@ class EncoderLayer(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, n_head, emb_dim, drop_rate, n_layer):
         super().__init__()
-        # 定义一个多层的Transformer Encoder
+
         self.encoder_layers = nn.ModuleList(
             [EncoderLayer(n_head, emb_dim, drop_rate) for _ in range(n_layer)]
         )
@@ -163,13 +162,13 @@ class PositionEmbedding(nn.Module):
 
     def __init__(
             self,
-            max_len,  # 最大长度
-            emb_dim,  # d_model
-            input_dim,  # 输入的维度
-            is_position  # 是否需要位置编码信息
+            max_len,
+            emb_dim,
+            input_dim,
+            is_position
     ):
         super().__init__()
-        # np.expand_dims 扩充维度，第二个参数表示第二位扩充
+
         """
         np.expand_dims(np.arange([[1, 2, 3], [1, 2, 3]]), 1) ==> [[[1, 2, 3], [1, 2, 3]]]
         shape (1, 2) ==> shape (1, 1, 2)
@@ -182,7 +181,7 @@ class PositionEmbedding(nn.Module):
         pe = np.expand_dims(pe, 0)  # [1, max_len, emb_dim]
 
         self.is_position = is_position
-        # 词汇信息编码
+
         self.pe = torch.from_numpy(pe).type(torch.float32)
         self.pe = self.pe.cuda()
 
@@ -193,7 +192,7 @@ class PositionEmbedding(nn.Module):
         i = relu(self.i(x))
         o = self.o(i)
         x_embed = o + self.pe if self.is_position else o  # [n, n_att dim]
-        # 用词向量 + 位置向量 => 最后的输入
+
         return x_embed
 
 
@@ -239,8 +238,6 @@ class SpatialTemporalTransformer(nn.Module):
     def __init__(self, n_input, t, n_grid, n_spatial_layer=4, n_temporal_layer=3, emb_dim=64, n_head=4, drop_rate=0.1):
         super().__init__()
 
-        # 定义时间spatial-temporal transformer
-        # 其中每一个spatial-temporal transformer中都有t个spatial transformer和一个temporal transformer
         self.spatial = nn.ModuleList([
             SpatialTransformer(n_input, n_grid, n_spatial_layer, emb_dim, n_head, drop_rate) for _ in range(t)]
         )
@@ -265,7 +262,6 @@ class SpatialTemporalTransformer(nn.Module):
             o = self.process_s(o)
             temporal_input[i] = o
 
-        # 3. 将每一个空间transformer的输出接入一个全连接层
         temporal_input = torch.permute(temporal_input, (1, 0, 2))  # [n_car, t, embed_dim]
         temporal_input = temporal_input.cuda()
         o = self.temporal(temporal_input)
@@ -300,7 +296,7 @@ class ResultOperateModule(nn.Module):
 
     def __init__(self, input_shape, output_shape):
         super().__init__()
-        # 由于输入维度大概在3，所以这里设置三个隐藏层
+
         self.i = nn.Linear(input_shape, 200)
         self.hidden_layer = nn.ModuleList(
             [nn.Linear(200, 200) for _ in range(3)]
@@ -374,7 +370,7 @@ class Generator(nn.Module):
         self.process_st = FullyConnectLayer(emb_dim * t, emb_dim)
         self.process_s = FullyConnectLayer(emb_dim * n_grid, emb_dim)
         # fully connect layer
-        self.fc = FullyConnectLayer(emb_dim * 3, 300)  # 需要将输出变成两种，一种是softmax，一种是
+        self.fc = FullyConnectLayer(emb_dim * 3, 300)
         self.embed = PositionEmbedding(emb_dim, emb_dim, input_dim=n_input, is_position=False)
         self.n_grid = n_grid
         self.c = nn.Sequential(
@@ -395,16 +391,13 @@ class Generator(nn.Module):
         )
 
     def forward(self, x):
-        # 输入维度 [n_car, t, n_grid, embed_dim]
-        # 为了保证初始结果的差异,需要使用一个非常长的residual结构,将输入中的当前车辆的信息,经过embedding后加到时空encoder的输出中
         now_x = torch.permute(x, (1, 0, 2, 3))[-1]  # [n_car, n_grid, n_input]
         now_aim_x = torch.permute(now_x, (1, 0, 2))[self.n_grid // 2]  # [n_car, n_input]
         now_aim_x = now_aim_x.cuda()
         now_embed = self.embed(now_aim_x)
         s = self.s(torch.permute(x, (1, 0, 2, 3))[-1])  # [n_car, n_grid, embed_dim]
         st = self.st(x)  # [n_car, t, embed_dim]
-        # print(s.shape, st.shape)
-        # st = torch.sum(st, dim=1)  # 不取最后一秒的结果，而是将窗口中的所有输出累加在一起
+
         st = torch.reshape(st, (st.shape[0], -1))
         st = self.process_st(st)
         s = torch.reshape(s, (s.shape[0], -1))
@@ -419,7 +412,7 @@ class Generator(nn.Module):
             dim=-1
         )  # [n_car, embed_dim * 3]
         o = self.fc(fc_input)  # [n_car, 5]
-        # 将FC layer的输出分别送入两个分支，一个是分类器，一个是回归器
+
         if self.target == 'reg':
             o = self.o(o)
         else:
