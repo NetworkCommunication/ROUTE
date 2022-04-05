@@ -18,9 +18,6 @@ transformer is [n_car, n_head, T, head_dim]
 
 
 class MultiHeadAttention(nn.Module):
-    """
-    多头注意力机制
-    """
     __constants__ = []
 
     def __init__(self, n_head, embed_dim, drop_rate, k_dim=None, v_dim=None):
@@ -33,7 +30,7 @@ class MultiHeadAttention(nn.Module):
 
         # 当Q、V、K的维度设置相等的时候，这三个变量不用
         self.q_dim = self.k_dim = k_dim if k_dim is not None else self.embed_dim
-        self.v_dim = self.v_dim if v_dim is not None else self.embed_dim
+        self.v_dim = v_dim if v_dim is not None else self.embed_dim
 
         self.wq = nn.Linear(embed_dim, n_head * self.head_dim)  # [n_car, n_attentions, num_heads * head_dim]
         self.wk = nn.Linear(embed_dim, n_head * self.head_dim)
