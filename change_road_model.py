@@ -91,7 +91,7 @@ class ChangeRoadModel:
             all_num = 0
             right_num_t = 0
             all_num_t = 0
-            # 开始训练模型
+
             for data in loader:
                 iterations += 1
                 m, l, y, t = data
@@ -100,15 +100,14 @@ class ChangeRoadModel:
                 m = m.cuda()
                 l = l.cuda()
                 y = y.cuda()
-                # print(m)
+
                 y_pre = self.model(l, m)
                 optimizer.zero_grad()
                 loss = loss_fun(y_pre, y.long())
                 loss.backward()
-                # res = road_map.get_many_neighbor(t[0].numpy())
-                # res = torch.tensor(res)
+
                 y_pre = y_pre.detach().cpu()
-                # y_pre += res
+
                 y_res = y_pre.argmax(1)
 
                 right_num += torch.sum(y.detach().cpu() == y_res)
@@ -116,36 +115,12 @@ class ChangeRoadModel:
                 average_g += loss
                 # print(t.shape)
 
-            # with torch.no_grad():
-            #     for data in test_loader:
-            #         iterations_t += 1
-            #         m, l, y, t = data
-            #         y = y[0]
-            #         all_num += len(y)
-            #         m = m.cuda()
-            #         l = l.cuda()
-            #         y = y.cuda()
-            #         # print(m)
-            #         y_pre = self.model(l, m)
-            #         loss = loss_fun(y_pre, y.long())
-            #
-            #         y_res = y_pre.argmax(1)
-            #         right_num_t += torch.sum(y == y_res)
-            #         average_t += loss
-
             scheduler_g.step()
             # print(iterations)
             print("epoch{}: -----------".format(i))
             print('loss: ', average_g / iterations)
             print('accuracy: ', right_num / all_num)
-            # print('loss_t: ', average_t / iterations_t)
-            # print('accuracy_t: ', right_num_t / all_num_t)
-            # summary.add_scalar('train', average_g / iterations, i)
-            # summary.add_scalar('accuracy_train', right_num / all_num, i)
-            # summary.add_scalar('test', average_t / iterations_t, i)
-            # summary.add_scalar('accuracy_tes', right_num_t / all_num_t, i)
-            # summary.close()
-            #     if
+
             if i % 10 == 0:
                 torch.save(self.model, 'cnn_change_road_model.pth')
 
